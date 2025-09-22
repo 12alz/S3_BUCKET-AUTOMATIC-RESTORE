@@ -1,0 +1,64 @@
+#!/bin/bash
+# Database Backup and S3 Glacier Instant Retrieval Upload Script
+
+#===========================================
+# CONFIGURATION - MODIFY THESE VALUES
+#===========================================
+# MySQL database connection details
+USER="your_mysql_username"        
+PASSWORD="your_mysql_password"    
+HOST="localhost"                  
+
+# AWS S3 configuration
+S3BUCKET="your-bucket-name"      
+
+# Comma-separated list of databases to backup
+# Example: "database1,database2,database3"
+DATABASES="database1,database2"   
+
+#===========================================
+# DO NOT MODIFY BELOW THIS LINE
+#===========================================
+
+# Timestamp configuration
+DATE_TIME=$(date +"%Y-%m-%d-%H%M%S")
+YEAR_MONTH=$(date +"%Y-%m")
+
+# S3 folder configuration
+S3_PATH="s3://$S3BUCKET/backups/$YEAR_MONTH/"
+
+# Function to backup and upload database directly to S3 Glacier IR
+backup_database() {
+    local db_name=$1
+    echo "Starting backup of database: $db_name"
+
+    # Verify mysqldump is available
+    if ! command -v mysqldump >/dev/null 2>&1; then
+        echo "Error: mysqldump command not found. Please install it."
+        exit 1
+    fi
+
+    # Verify AWS CLI is available
+    if ! command -v aws >/dev/null 2>&1; then
+        echo "Error: AWS CLI not found. Please install and configure it."
+        exit 1
+    fi
+
+    # Perform a compressed MySQL dump and pipe it directly to AWS S3.
+    # The --storage-class GLACIER_IR flag immediately sets the storage class,
+    # and the `-` in place of a filename tells the AWS CLI to read from stdin.
+    echo "Dumping and uploading to S3..."
+    if ! mysqldump -u "$USER" -p"$PASSWORD" -h "$HOST" --databases "$db_name" | gzip | aws s3 cp - "${S3_PATH}${db_name}_${DATE_TIME}.sql.gz" --storage-class GLACIER_IR; then
+        echo "Error: Backup and upload failed for $db_name"
+        exit 1
+    fi
+    echo "✓ Backup of '$db_name' completed successfully to Glacier Instant Retrieval."
+}
+
+# Perform backup for each database
+echo "Starting automated backup process..."
+IFS=',' read -ra DB_ARRAY <<< "$DATABASES"
+for DB in "${DB_ARRAY[@]}"; do
+    backup_database "$DB"
+done
+echo "Automated backup process completed."
