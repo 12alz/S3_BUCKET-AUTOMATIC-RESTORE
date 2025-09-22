@@ -52,7 +52,7 @@ backup_database() {
         echo "Error: Backup and upload failed for $db_name"
         exit 1
     fi
-    echo "✓ Backup of '$db_name' completed successfully to Glacier Instant Retrieval."
+    echo "Backup of '$db_name' completed successfully to Glacier Instant Retrieval."
 }
 
 # Perform backup for each database
